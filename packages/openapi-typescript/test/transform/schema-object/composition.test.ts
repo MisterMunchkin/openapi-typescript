@@ -581,6 +581,44 @@ describe("composition", () => {
       },
     ],
     [
+      "allOf > constraint-only required fields",
+      {
+        given: {
+          allOf: [
+            { $ref: "#/components/schemas/ShiftPayload" },
+            {
+              type: "object",
+              required: ["end_at", "job_id", "start_at"]
+            },
+          ],
+        },
+        want: `WithRequired<components["schemas"]["ShiftPayload"], "end_at" | "job_id" | "start_at">`,
+        options: {
+          ...DEFAULT_OPTIONS,
+          ctx: {
+            ...DEFAULT_OPTIONS.ctx,
+            resolve($ref) {
+              switch ($ref) {
+                case "#/components/schemas/ShiftPayload": {
+                  return {
+                    type: "object",
+                    properties: {
+                      end_at: { type: "string", format: "date-time" },
+                      job_id: { type: "integer" },
+                      start_at: { type: "string", format: "date-time" }
+                    }
+                  }
+                }
+                default: {
+                  return undefined as any;
+                }
+              }
+            }
+          }
+        }
+      }
+    ],
+    [
       "anyOf > basic",
       {
         given: {

@@ -207,10 +207,30 @@ export function transformSchemaObjectWithComposition(
     return output;
   }
 
+  function hasRequiredConstraint(item: SchemaObject | ReferenceObject): boolean {
+    return !("$ref" in item) &&
+      typeof item === "object" &&
+      "type" in item &&
+      item.type === "object" &&
+      Array.isArray(item.required) &&
+      !item.properties &&
+      !item.additionalProperties &&
+      !item.patternProperties;
+  }
+
   /** Collect allOf with Omit<> for discriminators */
   function collectAllOfCompositions(items: (SchemaObject | ReferenceObject)[], required?: string[]): ts.TypeNode[] {
     const output: ts.TypeNode[] = [];
+  
+    const requiredConstraints = items
+    .filter(hasRequiredConstraint)
+    .flatMap(item => (item as SchemaObject).required ?? []);
+
+    const allRequired = [...(required ?? []), ...requiredConstraints];
     for (const item of items) {
+      //Constraints will be handled via WithRequired
+      if (hasRequiredConstraint(item)) continue;
+
       let itemType: ts.TypeNode;
       // if this is a $ref, use WithRequired<X, Y> if parent specifies required properties
       // (but only for valid keys)
@@ -228,7 +248,7 @@ export function transformSchemaObjectWithComposition(
           !options.ctx.discriminators.refsHandled.includes(item.$ref)
         ) {
           // add WithRequired<X, Y> if necessary
-          const validRequired = (required ?? []).filter((key) => !!resolved.properties?.[key]);
+          const validRequired = allRequired.filter((key) => !!resolved.properties?.[key]);
           if (validRequired.length) {
             itemType = tsWithRequired(itemType, validRequired, options.ctx.injectFooter);
           }
@@ -236,7 +256,7 @@ export function transformSchemaObjectWithComposition(
       }
       // otherwise, if this is a schema object, combine parent `required[]` with its own, if any
       else {
-        const itemRequired = [...(required ?? [])];
+        const itemRequired = [...allRequired];
         if (typeof item === "object" && Array.isArray(item.required)) {
           itemRequired.push(...item.required);
         }
